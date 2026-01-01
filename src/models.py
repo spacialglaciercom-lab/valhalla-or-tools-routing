@@ -1,6 +1,6 @@
 """Pydantic models for structured drift reports."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -58,7 +58,7 @@ class DriftReport(BaseModel):
     schema_diff: SchemaDiff = Field(..., description="Schema differences")
     per_column_metrics: Dict[str, ColumnMetrics] = Field(..., description="Metrics for each column")
     top_changed_columns: List[TopChangedColumn] = Field(default_factory=list, description="Top changed columns sorted by PSI")
-    summary: Dict[str, any] = Field(default_factory=dict, description="Summary statistics")
+    summary: Dict[str, Any] = Field(default_factory=dict, description="Summary statistics")
     
     class Config:
         json_schema_extra = {
@@ -88,4 +88,3 @@ class LLMSummaryOutput(BaseModel):
     key_risks: List[str] = Field(..., description="List of key risks identified from the drift report.")
     recommended_actions: List[str] = Field(..., description="List of recommended actions based on the drift report.")
     top_issues: List[str] = Field(..., description="List of top 5 issues, formatted as 'column_name - Severity (PSI: value)'.")
-
