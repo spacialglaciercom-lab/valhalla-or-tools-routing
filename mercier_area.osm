@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="CGImap 0.8.6">
+  <bounds minlat="45.3040" minlon="-73.7420" maxlat="45.3160" maxlon="-73.7260"/>
+  
+  <!-- Sample nodes for Mercier area -->
+  <node id="1" lat="45.3040" lon="-73.7420" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="2" lat="45.3050" lon="-73.7410" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="3" lat="45.3060" lon="-73.7400" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="4" lat="45.3070" lon="-73.7390" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="5" lat="45.3080" lon="-73.7380" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="6" lat="45.3090" lon="-73.7370" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="7" lat="45.3100" lon="-73.7360" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="8" lat="45.3110" lon="-73.7350" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="9" lat="45.3120" lon="-73.7340" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="10" lat="45.3130" lon="-73.7330" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  
+  <!-- Cross connections -->
+  <node id="11" lat="45.3045" lon="-73.7350" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="12" lat="45.3055" lon="-73.7330" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="13" lat="45.3065" lon="-73.7310" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="14" lat="45.3075" lon="-73.7290" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="15" lat="45.3085" lon="-73.7270" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="16" lat="45.3095" lon="-73.7280" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="17" lat="45.3105" lon="-73.7300" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="18" lat="45.3115" lon="-73.7320" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="19" lat="45.3125" lon="-73.7310" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  <node id="20" lat="45.3135" lon="-73.7290" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1"/>
+  
+  <!-- Residential ways -->
+  <way id="100" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="5"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="rue principale"/>
+  </way>
+  
+  <way id="101" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="5"/>
+    <nd ref="6"/>
+    <nd ref="7"/>
+    <nd ref="8"/>
+    <nd ref="9"/>
+    <nd ref="10"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="avenue mercier"/>
+  </way>
+  
+  <way id="102" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="1"/>
+    <nd ref="11"/>
+    <nd ref="12"/>
+    <nd ref="3"/>
+    <tag k="highway" v="unclassified"/>
+    <tag k="name" v="boulevard transversal"/>
+  </way>
+  
+  <way id="103" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="4"/>
+    <nd ref="13"/>
+    <nd ref="14"/>
+    <nd ref="5"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="rue du parc"/>
+  </way>
+  
+  <way id="104" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="6"/>
+    <nd ref="16"/>
+    <nd ref="15"/>
+    <nd ref="14"/>
+    <tag k="highway" v="tertiary"/>
+    <tag k="name" v="chemin de la gare"/>
+  </way>
+  
+  <way id="105" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="8"/>
+    <nd ref="17"/>
+    <nd ref="18"/>
+    <nd ref="9"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="rue pigeon"/>
+  </way>
+  
+  <way id="106" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="10"/>
+    <nd ref="20"/>
+    <nd ref="19"/>
+    <nd ref="9"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="name" v="rue principale nord"/>
+  </way>
+  
+  <way id="107" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="2"/>
+    <nd ref="12"/>
+    <nd ref="13"/>
+    <nd ref="4"/>
+    <tag k="highway" v="residential"/>
+  </way>
+  
+  <!-- Service roads -->
+  <way id="200" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="3"/>
+    <nd ref="12"/>
+    <nd ref="18"/>
+    <tag k="highway" v="service"/>
+    <tag k="name" v="rue de service"/>
+  </way>
+  
+  <!-- Excluded features -->
+  <way id="300" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="11"/>
+    <nd ref="12"/>
+    <tag k="highway" v="footway"/>
+    <tag k="name" v="sentier piétonnier"/>
+  </way>
+  
+  <way id="301" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="14"/>
+    <nd ref="15"/>
+    <tag k="highway" v="cycleway"/>
+    <tag k="name" v="piste cyclable"/>
+  </way>
+  
+  <way id="302" version="1" changeset="1" timestamp="2024-01-01T00:00:00Z" user="mapper" uid="1">
+    <nd ref="17"/>
+    <nd ref="19"/>
+    <tag k="highway" v="service"/>
+    <tag k="service" v="parking_aisle"/>
+    <tag k="name" v="allée de stationnement"/>
+  </way>
+  
+</osm>
