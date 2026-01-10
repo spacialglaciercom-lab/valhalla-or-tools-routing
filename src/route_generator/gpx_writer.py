@@ -46,24 +46,20 @@ class GPXWriter:
         segment = gpxpy.gpx.GPXTrackSegment()
         track.segments.append(segment)
         
-        # Add all nodes from the circuit
-        visited_nodes = set()
-        
+        # Add all waypoints from circuit in strict order (no deduplication)
+        # This ensures continuous track - if circuit visits same node twice, include it twice
         for from_node, to_node in circuit:
-            # Add from_node if first occurrence
-            if from_node not in visited_nodes:
-                if from_node in self.node_coords:
-                    lat, lon = self.node_coords[from_node]
-                    point = gpxpy.gpx.GPXTrackPoint(lat, lon)
-                    segment.points.append(point)
-                    visited_nodes.add(from_node)
+            # Add from_node coordinate
+            if from_node in self.node_coords:
+                lat, lon = self.node_coords[from_node]
+                point = gpxpy.gpx.GPXTrackPoint(lat, lon)
+                segment.points.append(point)
             
-            # Add to_node
+            # Add to_node coordinate (will be included again as from_node of next edge)
             if to_node in self.node_coords:
                 lat, lon = self.node_coords[to_node]
                 point = gpxpy.gpx.GPXTrackPoint(lat, lon)
                 segment.points.append(point)
-                visited_nodes.add(to_node)
         
         # Write to file
         try:

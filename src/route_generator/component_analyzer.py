@@ -97,3 +97,28 @@ class ComponentAnalyzer:
         """
         subgraph = self.graph.subgraph(component_nodes)
         return subgraph.number_of_edges()
+    
+    def count_unique_segments_all_components(self) -> Dict[str, int]:
+        """
+        Count unique road segments (undirected edges) in all components.
+        Since graph has bidirectional edges, unique segments = total_edges / 2.
+        
+        Returns:
+            Dictionary with total unique segments across all components
+        """
+        total_edges = self.graph.number_of_edges()
+        # Each segment appears twice (bidirectional), so unique = edges / 2
+        total_unique_segments = total_edges // 2
+        
+        # Count per component
+        component_segments = {}
+        for i, component in enumerate(self.weakly_connected_components):
+            edges = self.count_edges_in_component(component)
+            unique = edges // 2
+            component_segments[f'component_{i}'] = unique
+        
+        return {
+            'total_unique_segments': total_unique_segments,
+            'component_segments': component_segments,
+            'total_edges': total_edges
+        }

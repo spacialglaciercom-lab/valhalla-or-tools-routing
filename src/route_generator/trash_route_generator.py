@@ -154,11 +154,16 @@ class TrashRouteGenerator:
         self.component_analyzer = ComponentAnalyzer(graph)
         components_info = self.component_analyzer.analyze()
         
+        # Count unique segments in all components
+        segment_counts = self.component_analyzer.count_unique_segments_all_components()
+        components_info['total_unique_segments'] = segment_counts['total_unique_segments']
+        
         self.stats['components'] = components_info
         
         logger.info(f"Found {components_info['total_components']} components")
         logger.info(f"Largest: {components_info['largest_component_size']} nodes")
         logger.info(f"Excluded: {components_info['excluded_nodes']} nodes")
+        logger.info(f"Total unique segments: {components_info['total_unique_segments']}")
     
     def _solve_eulerian(self, start_node: int = None) -> None:
         """Solve Eulerian circuit on the largest component"""
@@ -168,6 +173,16 @@ class TrashRouteGenerator:
         # Solve circuit
         self.eulerian_solver = EulerianSolver(subgraph)
         self.circuit = self.eulerian_solver.solve(start_node)
+        
+        # Track start node and method
+        if start_node is None:
+            start_node = self.eulerian_solver._find_start_node()
+            start_method = "auto"
+        else:
+            start_method = "user"
+        
+        self.stats['start_node'] = start_node
+        self.stats['start_node_method'] = start_method
         
         added_edges = len(self.eulerian_solver.get_added_edges())
         self.stats['added_edges'] = added_edges
@@ -225,15 +240,19 @@ class TrashRouteGenerator:
         
         output_path = os.path.join(self.output_dir, output_report)
         
+        components_info = self.stats.get('components', {})
         report_content = self.report_generator.generate(
             osm_file=self.osm_file,
             output_gpx=os.path.basename(gpx_file),
             included_highways=list(self.HIGHWAY_INCLUDE),
             excluded_tags=self.EXCLUDED_CONDITIONS,
-            components_info=self.stats.get('components', {}),
+            components_info=components_info,
             route_stats=self.stats.get('route', {}),
             turn_stats=self.stats.get('turns', None),
-            added_edges=self.stats.get('added_edges', 0)
+            added_edges=self.stats.get('added_edges', 0),
+            total_unique_segments=components_info.get('total_unique_segments', 0),
+            start_node=self.stats.get('start_node'),
+            start_node_method=self.stats.get('start_node_method', 'auto')
         )
         
         self.report_generator.save_report(report_content, output_path)
