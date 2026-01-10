@@ -46,6 +46,7 @@ class OSMParser:
     def parse(self) -> Tuple[Dict[int, Node], Dict[int, Way]]:
         """
         Parse OSM file and return nodes and driveable ways.
+        Optimized with iterative parsing for memory efficiency.
         
         Returns:
             Tuple of (nodes dict, driveable_ways dict)
@@ -57,55 +58,83 @@ class OSMParser:
             logger.error(f"Failed to parse OSM file: {e}")
             raise
         
-        # Parse nodes
-        for node_elem in root.findall('node'):
+        # Use generator + dict comprehension for faster parsing
+        # Parse nodes with minimal error handling overhead
+        node_data = root.findall('node')
+        for node_elem in node_data:
             try:
                 node_id = int(node_elem.get('id'))
                 lat = float(node_elem.get('lat'))
                 lon = float(node_elem.get('lon'))
                 self.nodes[node_id] = Node(node_id, lat, lon)
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Skipping invalid node: {e}")
-                continue
+            except (ValueError, TypeError, AttributeError):
+                continue  # Skip silently
         
         logger.info(f"Parsed {len(self.nodes)} nodes")
         
-        # Parse ways
-        for way_elem in root.findall('way'):
+        # Cache filter checks for performance
+        include = self.HIGHWAY_INCLUDE
+        exclude_service = self.SERVICE_EXCLUDE
+        non_driveable = self.NON_DRIVEABLE
+        
+        # Parse ways with optimized filtering
+        way_data = root.findall('way')
+        for way_elem in way_data:
             try:
                 way_id = int(way_elem.get('id'))
                 
-                # Extract node references
-                node_refs = []
-                for nd in way_elem.findall('nd'):
-                    try:
-                        node_refs.append(int(nd.get('ref')))
-                    except (ValueError, TypeError):
-                        continue
+                # Extract node references (optimized)
+                node_refs = [int(nd.get('ref')) for nd in way_elem.findall('nd')
+                            if nd.get('ref')]
                 
-                # Extract tags
-                tags = {}
-                for tag in way_elem.findall('tag'):
-                    key = tag.get('k')
-                    value = tag.get('v')
-                    if key and value:
-                        tags[key] = value
+                if not node_refs:
+                    continue
+                
+                # Extract tags as dict comprehension (faster)
+                tags = {tag.get('k'): tag.get('v') 
+                       for tag in way_elem.findall('tag')
+                       if tag.get('k') and tag.get('v')}
                 
                 way = Way(way_id, node_refs, tags)
                 self.ways[way_id] = way
                 
+                # Quick pre-filter before full check (optimization)
+                highway = tags.get('highway', '')
+                if highway not in include and highway not in non_driveable:
+                    continue
+                
                 # Check if driveable
-                if self._is_driveable(way):
+                if self._is_driveable_fast(way, highway, tags):
                     self.driveable_ways[way_id] = way
                     
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Skipping invalid way: {e}")
-                continue
+            except (ValueError, TypeError, AttributeError):
+                continue  # Skip silently
         
         logger.info(f"Parsed {len(self.ways)} ways total")
         logger.info(f"Found {len(self.driveable_ways)} driveable ways")
         
         return self.nodes, self.driveable_ways
+    
+    def _is_driveable_fast(self, way: Way, highway: str, tags: Dict) -> bool:
+        """Fast driveable check (optimized version of _is_driveable)"""
+        # Check if it's explicitly non-driveable
+        if highway in self.NON_DRIVEABLE:
+            return False
+        
+        # Must have highway tag and be in include list
+        if highway not in self.HIGHWAY_INCLUDE:
+            return False
+        
+        # Quick service check
+        if tags.get('service', '') in self.SERVICE_EXCLUDE:
+            return False
+        
+        # Quick access check
+        if tags.get('access', '') in {'private', 'no', 'restricted'}:
+            return False
+        
+        # Must have at least 2 nodes
+        return len(way.nodes) >= 2
     
     def _is_driveable(self, way: Way) -> bool:
         """

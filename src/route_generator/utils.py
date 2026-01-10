@@ -2,11 +2,14 @@
 
 import math
 from typing import Tuple
+from functools import lru_cache
 
 
+@lru_cache(maxsize=1024)
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculate distance between two coordinates in kilometers.
+    Optimized with LRU cache for repeated calculations.
     
     Args:
         lat1, lon1: First coordinate
@@ -17,23 +20,30 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     """
     R = 6371  # Earth radius in km
     
-    dLat = math.radians(lat2 - lat1)
+    # Optimize: pre-compute radians
+    lat1_r = math.radians(lat1)
+    lat2_r = math.radians(lat2)
+    dLat = lat2_r - lat1_r
     dLon = math.radians(lon2 - lon1)
     
-    a = math.sin(dLat / 2) * math.sin(dLat / 2) + \
-        math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * \
-        math.sin(dLon / 2) * math.sin(dLon / 2)
+    # Optimized Haversine with fewer trig calls
+    sin_dLat_2 = math.sin(dLat / 2)
+    sin_dLon_2 = math.sin(dLon / 2)
+    
+    a = sin_dLat_2 * sin_dLat_2 + \
+        math.cos(lat1_r) * math.cos(lat2_r) * sin_dLon_2 * sin_dLon_2
     
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    distance = R * c
     
-    return distance
+    return R * c
 
 
+@lru_cache(maxsize=1024)
 def bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculate bearing from point 1 to point 2 in degrees (0-360).
     North = 0, East = 90, South = 180, West = 270.
+    Optimized with LRU cache.
     
     Args:
         lat1, lon1: Starting coordinate
@@ -46,9 +56,14 @@ def bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     lat1_rad = math.radians(lat1)
     lat2_rad = math.radians(lat2)
     
-    y = math.sin(dLon) * math.cos(lat2_rad)
-    x = math.cos(lat1_rad) * math.sin(lat2_rad) - \
-        math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(dLon)
+    # Cache trig values
+    sin_lat1 = math.sin(lat1_rad)
+    cos_lat1 = math.cos(lat1_rad)
+    sin_lat2 = math.sin(lat2_rad)
+    cos_lat2 = math.cos(lat2_rad)
+    
+    y = math.sin(dLon) * cos_lat2
+    x = cos_lat1 * sin_lat2 - sin_lat1 * cos_lat2 * math.cos(dLon)
     
     bearing_rad = math.atan2(y, x)
     bearing_deg = (math.degrees(bearing_rad) + 360) % 360
@@ -56,11 +71,13 @@ def bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return bearing_deg
 
 
+@lru_cache(maxsize=2048)
 def turn_angle(incoming_bearing: float, outgoing_bearing: float) -> float:
     """
     Calculate turn angle in degrees.
     Positive = right turn, Negative = left turn.
     Range: -180 to +180
+    Optimized with cached lookups.
     
     Args:
         incoming_bearing: Bearing of incoming edge
@@ -71,11 +88,8 @@ def turn_angle(incoming_bearing: float, outgoing_bearing: float) -> float:
     """
     angle = outgoing_bearing - incoming_bearing
     
-    # Normalize to -180 to +180
-    while angle > 180:
-        angle -= 360
-    while angle < -180:
-        angle += 360
+    # Optimize: use modulo instead of while loops (faster)
+    angle = ((angle + 180) % 360) - 180
     
     return angle
 

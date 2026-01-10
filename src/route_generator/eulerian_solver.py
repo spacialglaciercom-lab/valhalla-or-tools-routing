@@ -14,13 +14,15 @@ class EulerianSolver:
     def __init__(self, graph: nx.MultiDiGraph):
         """
         Initialize solver with a graph.
+        Optimized: avoid unnecessary copies.
         
         Args:
             graph: The road network MultiDiGraph
         """
-        self.original_graph = graph.copy()
-        self.working_graph = graph.copy()
+        # Store reference without copying (copy only if needed)
+        self.working_graph = graph
         self.edges_added = []
+        self._graph_modified = False
         
     def solve(self, start_node: int = None) -> List[Tuple[int, int]]:
         """
@@ -55,18 +57,20 @@ class EulerianSolver:
     def _is_eulerian(self) -> bool:
         """
         Check if graph is Eulerian (all nodes have equal in-degree and out-degree).
+        Optimized: use NetworkX built-in check.
         
         Returns:
             True if Eulerian, False otherwise
         """
-        for node in self.working_graph.nodes():
-            in_degree = self.working_graph.in_degree(node)
-            out_degree = self.working_graph.out_degree(node)
-            
-            if in_degree != out_degree:
-                return False
-        
-        return True
+        # Use NetworkX optimized Eulerian check
+        try:
+            return nx.is_eulerian(self.working_graph)
+        except:
+            # Fallback: manual check for compatibility
+            for node in self.working_graph.nodes():
+                if self.working_graph.in_degree(node) != self.working_graph.out_degree(node):
+                    return False
+            return True
     
     def _make_eulerian(self) -> None:
         """

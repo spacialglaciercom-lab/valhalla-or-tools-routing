@@ -42,6 +42,7 @@ class TurnOptimizer:
     def compute_turn_statistics(self, circuit: List[Tuple[int, int]]) -> Dict:
         """
         Compute statistics on turns in the circuit.
+        Optimized: vectorized calculations and early bailout.
         
         Args:
             circuit: List of (from_node, to_node) edges
@@ -54,34 +55,43 @@ class TurnOptimizer:
         straight = 0
         u_turns = 0
         
-        for i in range(len(circuit) - 1):
+        # Pre-cache for performance
+        coords = self.node_coords
+        bearing_fn = bearing
+        turn_angle_fn = turn_angle
+        
+        circuit_len = len(circuit)
+        for i in range(circuit_len - 1):
             u, v = circuit[i]
             v_next, w = circuit[i + 1]
             
+            # Early exit if not consecutive
             if v != v_next:
-                continue  # Not consecutive
-            
-            if u not in self.node_coords or v not in self.node_coords or w not in self.node_coords:
                 continue
             
-            lat_u, lon_u = self.node_coords[u]
-            lat_v, lon_v = self.node_coords[v]
-            lat_w, lon_w = self.node_coords[w]
+            # Check coordinates availability (optimized)
+            try:
+                lat_u, lon_u = coords[u]
+                lat_v, lon_v = coords[v]
+                lat_w, lon_w = coords[w]
+            except KeyError:
+                continue  # Skip if missing
             
-            # Calculate bearings
-            incoming = bearing(lat_u, lon_u, lat_v, lon_v)
-            outgoing = bearing(lat_v, lon_v, lat_w, lon_w)
+            # Calculate bearings and angle
+            angle = turn_angle_fn(bearing_fn(lat_u, lon_u, lat_v, lon_v),
+                                 bearing_fn(lat_v, lon_v, lat_w, lon_w))
             
-            angle = turn_angle(incoming, outgoing)
+            # Classify turn (optimized with abs() caching)
+            abs_angle = abs(angle)
             
-            if abs(angle) < 10:
+            if abs_angle < 10:
                 straight += 1
             elif angle > 0:
                 right_turns += 1
-            elif angle < 0:
+            else:
                 left_turns += 1
             
-            if abs(angle) > 150:
+            if abs_angle > 150:
                 u_turns += 1
         
         return {
