@@ -1,0 +1,156 @@
+{
+  "examples": {
+    "status": {
+      "method": "GET",
+      "url": "http://localhost:8002/status",
+      "description": "Get service status and version information"
+    },
+    "route_auto": {
+      "method": "POST",
+      "url": "http://localhost:8002/route",
+      "description": "Calculate route for car/driving",
+      "body": {
+        "locations": [
+          {"lat": 37.7749, "lon": -122.4194},
+          {"lat": 37.7849, "lon": -122.4094}
+        ],
+        "costing": "auto",
+        "directions_options": {
+          "units": "kilometers"
+        }
+      }
+    },
+    "route_bicycle": {
+      "method": "POST",
+      "url": "http://localhost:8002/route",
+      "description": "Calculate route for bicycle",
+      "body": {
+        "locations": [
+          {"lat": 37.7749, "lon": -122.4194},
+          {"lat": 37.7849, "lon": -122.4094}
+        ],
+        "costing": "bicycle",
+        "costing_options": {
+          "bicycle": {
+            "bicycle_type": "Road",
+            "cycling_speed": 20,
+            "use_roads": 0.5
+          }
+        }
+      }
+    },
+    "route_pedestrian": {
+      "method": "POST",
+      "url": "http://localhost:8002/route",
+      "description": "Calculate route for walking",
+      "body": {
+        "locations": [
+          {"lat": 37.7749, "lon": -122.4194},
+          {"lat": 37.7849, "lon": -122.4094}
+        ],
+        "costing": "pedestrian",
+        "costing_options": {
+          "pedestrian": {
+            "walking_speed": 5.1,
+            "walkway_factor": 1.0,
+            "sidewalk_factor": 1.0
+          }
+        }
+      }
+    },
+    "isochrone": {
+      "method": "POST",
+      "url": "http://localhost:8002/isochrone",
+      "description": "Calculate isochrone (reachable area) from a point",
+      "body": {
+        "locations": [{"lat": 37.7749, "lon": -122.4194}],
+        "costing": "auto",
+        "contours": [
+          {"time": 5},
+          {"time": 10},
+          {"time": 15}
+        ],
+        "denoise": 0.2,
+        "generalize": 200
+      }
+    },
+    "matrix": {
+      "method": "POST",
+      "url": "http://localhost:8002/sources_to_targets",
+      "description": "Calculate distance/time matrix between sources and targets",
+      "body": {
+        "sources": [
+          {"lat": 37.7749, "lon": -122.4194},
+          {"lat": 37.7849, "lon": -122.4094}
+        ],
+        "targets": [
+          {"lat": 37.7949, "lon": -122.3994},
+          {"lat": 37.8049, "lon": -122.3894}
+        ],
+        "costing": "auto"
+      }
+    },
+    "optimized_route": {
+      "method": "POST",
+      "url": "http://localhost:8002/optimized_route",
+      "description": "Calculate optimized route visiting multiple locations",
+      "body": {
+        "locations": [
+          {"lat": 37.7749, "lon": -122.4194},
+          {"lat": 37.7849, "lon": -122.4094},
+          {"lat": 37.7949, "lon": -122.3994},
+          {"lat": 37.8049, "lon": -122.3894}
+        ],
+        "costing": "auto"
+      }
+    },
+    "locate": {
+      "method": "GET",
+      "url": "http://localhost:8002/locate?lon=-122.4194&lat=37.7749",
+      "description": "Get information about a specific location"
+    },
+    "route_with_alternatives": {
+      "method": "POST",
+      "url": "http://localhost:8002/route",
+      "description": "Get route with alternative paths",
+      "body": {
+        "locations": [
+          {"lat": 37.7749, "lon": -122.4194},
+          {"lat": 37.7849, "lon": -122.4094}
+        ],
+        "costing": "auto",
+        "alternates": 2,
+        "directions_options": {
+          "units": "kilometers"
+        }
+      }
+    },
+    "route_with_exclusions": {
+      "method": "POST",
+      "url": "http://localhost:8002/route",
+      "description": "Calculate route avoiding specific locations or areas",
+      "body": {
+        "locations": [
+          {"lat": 37.7749, "lon": -122.4194},
+          {"lat": 37.7849, "lon": -122.4094}
+        ],
+        "costing": "auto",
+        "exclude_locations": [
+          {"lat": 37.7799, "lon": -122.4144}
+        ],
+        "exclude_polygons": [
+          {
+            "type": "Polygon",
+            "coordinates": [[
+              [-122.42, 37.77],
+              [-122.41, 37.77],
+              [-122.41, 37.78],
+              [-122.42, 37.78],
+              [-122.42, 37.77]
+            ]]
+          }
+        ]
+      }
+    }
+  }
+}

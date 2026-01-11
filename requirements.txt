@@ -1,7 +1,36 @@
+# Core dependencies
+networkx>=3.0
+gpxpy>=1.4.0
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+
+# Data drift detection
+pydantic>=2.0
+
+# Streamlit app
+streamlit>=1.28.0
+
+# FastAPI backend for trash route API
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+
+# OSM PBF support (optional)
+pyosmium>=3.7.0; platform_system != "Windows"
+
+# Docker and HTTP
 docker>=6.0.0
 requests>=2.28.0
+
+# Windows-specific
 pywin32>=305; sys_platform == "win32"
-networkx>=3.0
-gpxpy>=1.5.0
-shapely>=2.0.0
-geopy>=2.3.0
+
+# FastAPI backend (for trash route API)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+python-multipart>=0.0.6
+aiofiles>=23.2.1

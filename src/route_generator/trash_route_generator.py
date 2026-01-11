@@ -3,7 +3,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Callable, Dict, List
 
 from .osm_parser import OSMParser
 from .graph_builder import GraphBuilder
@@ -34,16 +34,25 @@ class TrashRouteGenerator:
         'access=private'
     ]
     
-    def __init__(self, osm_file: str, output_dir: str = None):
+    def __init__(self, osm_file: str, output_dir: str = None,
+                 ignore_oneway: bool = True,
+                 prefer_right_turns: bool = True,
+                 progress_callback: Optional[Callable[[str, int, str, Optional[Dict]], None]] = None):
         """
         Initialize route generator.
         
         Args:
             osm_file: Path to OSM file
             output_dir: Directory for output files (default: current directory)
+            ignore_oneway: If True, ignore oneway restrictions (Option A). If False, respect them (Option B).
+            prefer_right_turns: If True, use turn-cost-aware algorithm (default: True)
+            progress_callback: Optional callback function(step, progress, message, stats) for progress updates
         """
         self.osm_file = osm_file
         self.output_dir = output_dir or os.getcwd()
+        self.ignore_oneway = ignore_oneway
+        self.prefer_right_turns = prefer_right_turns
+        self.progress_callback = progress_callback
         
         # Ensure output directory exists
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
@@ -67,6 +76,8 @@ class TrashRouteGenerator:
         logger.info(f"Initialized TrashRouteGenerator")
         logger.info(f"  OSM file: {osm_file}")
         logger.info(f"  Output dir: {self.output_dir}")
+        logger.info(f"  Ignore oneway: {ignore_oneway} (Option {'A' if ignore_oneway else 'B'})")
+        logger.info(f"  Prefer right turns: {prefer_right_turns}")
     
     def generate(self, 
                  output_gpx: str = "trash_collection_route.gpx",
@@ -112,11 +123,13 @@ class TrashRouteGenerator:
             
             # Step 7: Generate report
             logger.info("\n[Step 7] Generating report...")
+            self._progress("complete", 99, "Generating report...")
             report_path = self._generate_report(output_report, gpx_path)
             
             logger.info(f"\nRoute generation complete!")
             logger.info(f"  GPX file: {gpx_path}")
             logger.info(f"  Report: {report_path}")
+            self._progress("complete", 100, "Route generation complete!", self.stats)
             
             return gpx_path, report_path
             
@@ -126,30 +139,54 @@ class TrashRouteGenerator:
     
     def _parse_osm(self) -> None:
         """Parse OSM file and extract road data"""
+        self._progress("parsing", 10, "Parsing OSM file...")
         self.parser = OSMParser(self.osm_file)
         self.nodes, self.driveable_ways = self.parser.parse()
         self.segments = self.parser.get_road_segments()
         
         logger.info(f"Parsed OSM: {len(self.nodes)} nodes, {len(self.driveable_ways)} driveable ways")
         logger.info(f"Extracted {len(self.segments)} road segments")
+        self._progress("parsing", 20, f"Parsed {len(self.nodes)} nodes, {len(self.driveable_ways)} ways",
+                      {"nodes": len(self.nodes), "edges": len(self.segments)})
     
     def _build_graph(self) -> None:
         """Build road network graph from segments"""
+        self._progress("building", 30, "Building road network graph...")
         self.graph_builder = GraphBuilder()
         
-        for node_id_1, node_id_2, lat1, lon1, lat2, lon2 in self.segments:
+        # Process segments - handle both old format (6 elements) and new format (7 elements with oneway)
+        oneway_count = 0
+        for segment in self.segments:
+            if len(segment) == 7:
+                node_id_1, node_id_2, lat1, lon1, lat2, lon2, oneway_tag = segment
+            else:
+                # Backward compatibility with old format
+                node_id_1, node_id_2, lat1, lon1, lat2, lon2 = segment[:6]
+                oneway_tag = ''
+            
+            if oneway_tag and oneway_tag not in {'', 'no'}:
+                oneway_count += 1
+            
             distance = haversine_distance(lat1, lon1, lat2, lon2)
+            
             self.graph_builder.add_segment(
                 node_id_1, node_id_2,
                 lat1, lon1, lat2, lon2,
-                distance
+                distance,
+                oneway=oneway_tag,
+                ignore_oneway=self.ignore_oneway
             )
         
         stats = self.graph_builder.get_stats()
         logger.info(f"Built graph: {stats['nodes']} nodes, {stats['edges']} edges")
+        if oneway_count > 0:
+            logger.info(f"Processed {oneway_count} oneway segments (Option {'A' if self.ignore_oneway else 'B'})")
+        self._progress("building", 40, f"Graph built: {stats['nodes']} nodes, {stats['edges']} edges",
+                      {"nodes": stats['nodes'], "edges": stats['edges'], "oneway_count": oneway_count})
     
     def _analyze_components(self) -> None:
         """Analyze connected components and select largest"""
+        self._progress("analyzing", 50, "Analyzing connected components...")
         graph = self.graph_builder.get_graph()
         self.component_analyzer = ComponentAnalyzer(graph)
         components_info = self.component_analyzer.analyze()
@@ -164,14 +201,24 @@ class TrashRouteGenerator:
         logger.info(f"Largest: {components_info['largest_component_size']} nodes")
         logger.info(f"Excluded: {components_info['excluded_nodes']} nodes")
         logger.info(f"Total unique segments: {components_info['total_unique_segments']}")
+        self._progress("analyzing", 60, f"Found {components_info['total_components']} components",
+                      {"components": components_info['total_components']})
     
     def _solve_eulerian(self, start_node: int = None) -> None:
         """Solve Eulerian circuit on the largest component"""
+        self._progress("solving", 65, "Solving Eulerian circuit...")
         # Get subgraph for largest component
         subgraph = self.component_analyzer.get_largest_component_subgraph()
         
-        # Solve circuit
-        self.eulerian_solver = EulerianSolver(subgraph)
+        # Get node coordinates for turn-cost calculation
+        node_coords = self.graph_builder.get_all_node_coords()
+        
+        # Solve circuit with turn-cost awareness if enabled
+        self.eulerian_solver = EulerianSolver(
+            subgraph,
+            node_coords=node_coords if self.prefer_right_turns else None,
+            prefer_right_turns=self.prefer_right_turns
+        )
         self.circuit = self.eulerian_solver.solve(start_node)
         
         # Track start node and method
@@ -189,13 +236,16 @@ class TrashRouteGenerator:
         
         logger.info(f"Solved Eulerian circuit: {len(self.circuit)} edge traversals")
         logger.info(f"Added {added_edges} edges for Eulerian property (Chinese Postman)")
+        self._progress("solving", 80, f"Circuit solved: {len(self.circuit)} edges",
+                      {"circuit_length": len(self.circuit)})
     
     def _optimize_turns(self) -> None:
         """Optimize route with turn preference heuristic"""
+        self._progress("optimizing", 85, "Analyzing turn statistics...")
         node_coords = self.graph_builder.get_all_node_coords()
         self.turn_optimizer = TurnOptimizer(node_coords)
         
-        # Optimize circuit
+        # Optimize circuit (may be no-op if turn costs already applied during solving)
         self.circuit = self.turn_optimizer.optimize_circuit(self.circuit)
         
         # Compute statistics
@@ -206,9 +256,11 @@ class TrashRouteGenerator:
                    f"{turn_stats['left_turns']} left, "
                    f"{turn_stats['straight']} straight, "
                    f"{turn_stats['u_turns']} U-turns")
+        self._progress("optimizing", 90, "Turn optimization complete")
     
     def _write_gpx(self, output_gpx: str) -> str:
         """Write circuit to GPX file"""
+        self._progress("writing", 95, "Writing GPX file...")
         if not output_gpx.endswith('.gpx'):
             output_gpx += '.gpx'
         
@@ -230,6 +282,7 @@ class TrashRouteGenerator:
         logger.info(f"GPX written: {output_path}")
         logger.info(f"  Distance: {route_stats['total_distance_km']} km")
         logger.info(f"  Est. time: {route_stats['estimated_drive_time_minutes']} min")
+        self._progress("writing", 98, f"GPX written: {route_stats['total_distance_km']} km")
         
         return output_path
     
@@ -260,6 +313,14 @@ class TrashRouteGenerator:
         logger.info(f"Report written: {output_path}")
         
         return output_path
+    
+    def _progress(self, step: str, progress: int, message: str, stats: Optional[Dict] = None) -> None:
+        """Call progress callback if available"""
+        if self.progress_callback:
+            try:
+                self.progress_callback(step, progress, message, stats)
+            except Exception as e:
+                logger.warning(f"Progress callback error: {e}")
     
     def get_summary(self) -> dict:
         """Get summary of generation results"""

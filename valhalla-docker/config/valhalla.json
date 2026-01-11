@@ -1,0 +1,152 @@
+{
+  "mjolnir": {
+    "tile_dir": "/custom_files/tiles",
+    "tile_extract": "/custom_files/valhalla_tiles.tar",
+    "admin": "/custom_files/admins/admins.sqlite",
+    "timezone": "/custom_files/timezones/timezones.sqlite",
+    "transit_dir": "/custom_files/transit",
+    "transit_feeds_dir": "/custom_files/gtfs_feeds",
+    "traffic_extract": "/custom_files/traffic.tar",
+    "concurrency": 4,
+    "logging": {
+      "type": "std_out",
+      "color": true,
+      "file_name": "path_to_some_file.log",
+      "long_request": 100.0
+    },
+    "hierarchy": true,
+    "shortcuts": true,
+    "max_cache_size": 1000000000,
+    "include_driveways": true,
+    "default_speeds_config": "/custom_files/config/default_speeds.json"
+  },
+  "loki": {
+    "actions": [
+      "locate",
+      "route",
+      "height",
+      "sources_to_targets",
+      "optimized_route",
+      "isochrone",
+      "trace_route",
+      "trace_attributes",
+      "expansion",
+      "centroid",
+      "status",
+      "tile"
+    ],
+    "logging": {
+      "type": "std_out",
+      "color": true,
+      "file_name": "path_to_some_file.log",
+      "long_request": 100.0
+    },
+    "service_defaults": {
+      "minimum_reachability": 50,
+      "radius": 0,
+      "search_cutoff": 35000,
+      "node_snap_tolerance": 5,
+      "street_side_tolerance": 5,
+      "street_side_max_distance": 1000,
+      "heading_tolerance": 60
+    },
+    "use_connectivity": true
+  },
+  "thor": {
+    "logging": {
+      "type": "std_out",
+      "color": true,
+      "file_name": "path_to_some_file.log",
+      "long_request": 110.0
+    },
+    "source_to_target_algorithm": "select_optimal"
+  },
+  "odin": {
+    "logging": {
+      "type": "std_out",
+      "color": true,
+      "file_name": "path_to_some_file.log"
+    }
+  },
+  "meili": {
+    "customizable": [
+      "mode",
+      "search_radius",
+      "turn_penalty_factor",
+      "gps_accuracy",
+      "sigma_z",
+      "beta",
+      "max_route_distance_factor",
+      "max_route_time_factor"
+    ],
+    "default": {
+      "sigma_z": 4.07,
+      "gps_accuracy": 5.0,
+      "beta": 3,
+      "max_route_distance_factor": 5,
+      "max_route_time_factor": 5,
+      "search_radius": 50,
+      "turn_penalty_factor": 0
+    },
+    "verbose": false,
+    "logging": {
+      "type": "std_out",
+      "color": true,
+      "file_name": "path_to_some_file.log"
+    }
+  },
+  "httpd": {
+    "service": {
+      "listen": "0.0.0.0:8002",
+      "loop": "ipv4",
+      "interrupt": "ipv4"
+    }
+  },
+  "service_limits": {
+    "skadi": {
+      "max_shape": 750000,
+      "min_resample": 10.0
+    },
+    "trace": {
+      "max_distance": 200000.0,
+      "max_gps_accuracy": 100.0,
+      "max_search_radius": 100.0,
+      "max_shape": 16000,
+      "max_alternates": 4,
+      "max_alternates_shape": 100
+    },
+    "isochrone": {
+      "max_contours": 4,
+      "max_distance": 25000.0,
+      "max_locations": 1,
+      "max_time_contour": 120,
+      "max_distance_contour": 200
+    },
+    "max_exclude_locations": 50,
+    "max_exclude_polygons_length": 10000,
+    "max_radius": 200,
+    "max_reachability": 100,
+    "max_alternates": 2,
+    "auto": {
+      "max_distance": 5000000.0,
+      "max_locations": 20,
+      "max_matrix_distance": 400000.0,
+      "max_matrix_location_pairs": 2500
+    },
+    "bicycle": {
+      "max_distance": 500000.0,
+      "max_locations": 50,
+      "max_matrix_distance": 200000.0,
+      "max_matrix_location_pairs": 2500
+    },
+    "pedestrian": {
+      "max_distance": 250000.0,
+      "max_locations": 50,
+      "max_matrix_distance": 200000.0,
+      "max_matrix_location_pairs": 2500
+    }
+  },
+  "additional_data": {
+    "elevation": "/custom_files/elevation"
+  }
+}

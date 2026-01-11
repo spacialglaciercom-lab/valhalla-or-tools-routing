@@ -1,0 +1,161 @@
+version: '3.8'
+
+services:
+  valhalla:
+    # Use the base Valhalla image to load custom tiles
+    image: ghcr.io/valhalla/valhalla:latest
+    
+    container_name: valhalla-routing
+    
+    # Start valhalla service with config
+    command: ["valhalla_service", "/custom_files/valhalla.json"]
+    ports:
+      - "${VALHALLA_PORT:-8002}:8002"
+    
+    # Volume mounts for persistent data
+    volumes:
+      # Map valhalla_data directory from D: drive (contains tiles)
+      # The official image automatically detects and uses tiles from /custom_files
+      - D:/valhalla_data:/custom_files
+      # Map config directory (will be merged with auto-generated config)
+      - ./config:/custom_files/config:ro
+    
+    # Environment variables for configuration
+    environment:
+      # Start valhalla_service
+      - VALHALLA_CONFIG=/custom_files/valhalla.json
+      - VALHALLA_PORT=8002
+    
+    # Resource limits (adjust via .env if needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT:-4.0}'
+          memory: ${MEMORY_LIMIT:-8G}
+        reservations:
+          cpus: '${CPU_RESERVATION:-2.0}'
+          memory: ${MEMORY_RESERVATION:-4G}
+    
+    # Restart policy - automatically restart if container stops
+    restart: unless-stopped
+    
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    
+    # Network configuration
+    networks:
+      - valhalla-network
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  trash-route-api:
+    # Build from project root to include src/ directory
+    build:
+      context: ..
+      dockerfile: backend/trash-route-api/Dockerfile
+    
+    container_name: trash-route-api
+    
+    ports:
+      - "${TRASH_ROUTE_PORT:-8003}:8003"
+    
+    # Volume mounts
+    volumes:
+      # Map output directory from D: drive
+      - D:/trash_routes:/app/data
+      # Map Python source code (for development, optional)
+      - ../src:/app/src:ro
+    
+    # Environment variables
+    environment:
+      - BACKEND_PORT=8003
+      - HOST=0.0.0.0
+      - TRASH_ROUTE_OUTPUT_DIR=/app/data
+      - MAX_FILE_SIZE_MB=500
+      - TEMP_FILE_RETENTION_HOURS=24
+      - PYTHON_PATH=/app/..
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '${TRASH_API_CPU_LIMIT:-2.0}'
+          memory: ${TRASH_API_MEMORY_LIMIT:-4G}
+        reservations:
+          cpus: '${TRASH_API_CPU_RESERVATION:-1.0}'
+          memory: ${TRASH_API_MEMORY_RESERVATION:-2G}
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Network configuration
+    networks:
+      - valhalla-network
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  or-tools-solver:
+    build:
+      context: ./or-tools
+      dockerfile: Dockerfile
+    container_name: or-tools-solver
+    ports:
+      - "${OR_TOOLS_PORT:-5000}:5000"
+    environment:
+      - VALHALLA_API=http://valhalla:8002
+      - PORT=5000
+      - HOST=0.0.0.0
+      - MODE=api
+    depends_on:
+      valhalla:
+        condition: service_healthy
+    networks:
+      - valhalla-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Network configuration
+networks:
+  valhalla-network:
+    driver: bridge
+    name: valhalla-network
+
+# Volume configuration (optional - for named volumes)
+volumes:
+  valhalla-data:
+    driver: local
+  valhalla-tiles:
+    driver: local

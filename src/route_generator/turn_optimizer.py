@@ -1,8 +1,7 @@
 """Turn optimization for route generation"""
 
 import logging
-import math
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple, Dict
 from .utils import bearing, turn_angle, turn_cost
 
 logger = logging.getLogger(__name__)

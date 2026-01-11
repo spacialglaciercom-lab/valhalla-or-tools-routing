@@ -1,0 +1,364 @@
+================================================================================
+SYSTEM ARCHITECTURE DOCUMENTATION
+Valhalla + OR-tools + Trash Route Generator
+================================================================================
+
+OVERVIEW
+--------
+
+This system integrates Valhalla routing engine, OR-tools VRP solver, and a 
+trash collection route generator to provide optimized routing solutions.
+
+COMPONENT ARCHITECTURE
+----------------------
+
+Docker Compose Environment
+  └── valhalla-network (Bridge Network)
+      ├── Valhalla Service (Port 8002) - Routing Engine
+      ├── OR-tools Solver (Port 5000) - VRP API
+      └── Trash Route API (Port 8003) - Route Generator API
+
+External Resources
+  ├── Valhalla Tiles (D:/valhalla_data)
+  └── Output Directory (D:/trash_routes)
+
+Communication Flow
+  Client Applications
+    ├── HTTP POST /api/v1/solve → OR-tools Solver
+    ├── HTTP POST /upload → Trash Route API
+    └── HTTP GET /status → Valhalla
+
+  OR-tools Solver
+    └── HTTP POST /sources_to_targets → Valhalla
+
+  Valhalla
+    └── Reads map tiles from D:/valhalla_data
+
+  OR-tools Solver
+    └── Depends on Valhalla (waits for health check)
+
+COMPONENT DETAILS
+-----------------
+
+1. VALHALLA ROUTING ENGINE
+   Service: valhalla
+   Port: 8002
+   Image: ghcr.io/valhalla/valhalla:latest
+   Purpose: Provides routing and distance matrix calculations
+
+   Key Features:
+   - Routing between locations
+   - Distance/time matrix generation
+   - Multiple routing profiles (driving, walking, cycling)
+   - Isochrone generation
+
+   Volume Mounts:
+   - D:/valhalla_data:/custom_files - Map tiles
+   - ./config:/custom_files/config:ro - Configuration
+
+   Health Check: GET /status
+
+
+2. OR-TOOLS VRP SOLVER
+   Service: or-tools-solver
+   Port: 5000
+   Build: ./or-tools/Dockerfile
+   Purpose: Solves Vehicle Routing Problems using OR-tools
+
+   Key Features:
+   - VRP optimization with multiple vehicles
+   - Distance matrix from Valhalla
+   - Route optimization algorithms
+   - REST API for solving VRP
+
+   API Endpoints:
+   - GET /health - Health check
+   - GET / - Service info
+   - POST /api/v1/solve - Solve VRP problem
+
+   Dependencies:
+   - Depends on Valhalla (waits for health check)
+   - Uses Valhalla for distance matrix via http://valhalla:8002
+
+
+3. TRASH ROUTE GENERATOR API
+   Service: trash-route-api
+   Port: 8003
+   Build: backend/trash-route-api/Dockerfile
+   Purpose: Generates optimized trash collection routes from OSM data
+
+   Key Features:
+   - OSM file parsing (XML and PBF via pyrosm)
+   - Road network extraction
+   - Eulerian circuit generation
+   - GPX route output
+   - Turn optimization
+
+   API Endpoints:
+   - GET /health - Health check
+   - POST /upload - Upload OSM file
+   - POST /generate - Generate route
+   - GET /status/{job_id} - Get job status
+   - GET /download/{job_id} - Download results
+
+   Processing Pipeline:
+   1. OSM Parser (pyrosm for PBF, XML parser for XML)
+   2. Graph Builder (NetworkX)
+   3. Component Analyzer
+   4. Eulerian Solver
+   5. Turn Optimizer
+   6. GPX Writer
+
+
+DATA FLOW
+---------
+
+VRP SOLVING FLOW
+----------------
+
+Step 1: Client sends location list to OR-tools API
+  POST /api/v1/solve
+  {
+    "locations": [{"id": 1, "latitude": 45.2462012, "longitude": -74.2427412}],
+    "num_vehicles": 1,
+    "depot_id": 1
+  }
+
+Step 2: OR-tools requests distance matrix from Valhalla
+  POST /sources_to_targets
+  {
+    "sources": [coordinates],
+    "targets": [coordinates],
+    "costing": "auto"
+  }
+
+Step 3: Valhalla calculates distances/times between all locations
+  Returns: Distance matrix (NxN matrix)
+
+Step 4: OR-tools solves VRP optimization problem
+  Uses Google OR-tools routing solver
+  Optimizes route assignments to vehicles
+
+Step 5: OR-tools returns optimized routes
+  {
+    "status": "success",
+    "total_distance_m": 12345,
+    "num_routes": 1,
+    "routes": [
+      {
+        "vehicle": 1,
+        "stops": [...],
+        "distance_m": 12345
+      }
+    ]
+  }
+
+
+TRASH ROUTE GENERATION FLOW
+----------------------------
+
+Step 1: Client uploads OSM file (XML or PBF)
+  POST /upload
+  Content-Type: multipart/form-data
+  File: area.osm or area.osm.pbf
+
+Step 2: OSM Parser extracts road network
+  - If PBF: Uses pyrosm library (fast Cython-based parsing)
+  - If XML: Uses standard XML parser
+  - Extracts nodes (coordinates) and ways (road segments)
+
+Step 3: Graph Builder creates NetworkX graph
+  - Converts OSM ways to graph edges
+  - Adds nodes with coordinates
+  - Filters for driveable roads
+
+Step 4: Component Analyzer identifies connected components
+  - Finds all connected subgraphs
+  - Ensures route can traverse entire network
+
+Step 5: Eulerian Solver finds optimal route
+  - Finds Eulerian circuit covering all edges
+  - Ensures each road segment is traversed
+
+Step 6: Turn Optimizer minimizes left turns
+  - Reorders route to prefer right turns
+  - Optimizes for right-side collection
+
+Step 7: GPX Writer generates output file
+  - Creates GPX track file
+  - Includes waypoints and route information
+
+Step 8: Client downloads results
+  GET /download/{job_id}
+  Returns: GPX file and analysis report
+
+
+TECHNOLOGY STACK
+----------------
+
+Routing & Optimization:
+  - Valhalla: C++ routing engine for distance/time calculations
+  - OR-tools: Google's optimization library for VRP solving
+  - NetworkX: Python graph library for network operations
+
+Data Processing:
+  - Pyrosm: Fast PBF parsing (Cython-based, 2-4x faster than pyosmium)
+  - Geopandas: GeoDataFrame operations (dependency of pyrosm)
+  - GPXpy: GPX file generation
+
+APIs & Services:
+  - FastAPI: Modern Python web framework for REST APIs
+  - Uvicorn: ASGI server for FastAPI
+  - WebSockets: Real-time progress updates
+
+Infrastructure:
+  - Docker: Containerization
+  - Docker Compose: Service orchestration
+  - Bridge Network: Internal service communication
+
+
+NETWORK ARCHITECTURE
+--------------------
+
+All services communicate via the "valhalla-network" bridge network:
+
+valhalla-network (bridge)
+├── valhalla (8002)
+├── or-tools-solver (5000) → depends on valhalla
+└── trash-route-api (8003)
+
+Service Discovery:
+  - Services use Docker service names (e.g., http://valhalla:8002)
+  - Port mapping exposes services to host machine
+  - Internal communication stays within Docker network
+
+Dependencies:
+  - OR-tools waits for Valhalla health check before starting
+  - OR-tools queries Valhalla for distance matrices
+  - All services are independent except OR-tools → Valhalla dependency
+
+
+STORAGE ARCHITECTURE
+--------------------
+
+Volume Mounts:
+
+Valhalla:
+  - D:/valhalla_data:/custom_files - Map tiles (read-only for container)
+  - ./config:/custom_files/config:ro - Configuration
+
+Trash Route API:
+  - D:/trash_routes:/app/data - Output directory (read-write)
+  - ../src:/app/src:ro - Source code (development, read-only)
+
+OR-tools:
+  - No persistent volumes (stateless API)
+
+Data Persistence:
+  - Map Tiles: Stored on host at D:/valhalla_data
+  - Generated Routes: Stored at D:/trash_routes
+  - Container State: Ephemeral (stateless services)
+
+
+PERFORMANCE CHARACTERISTICS
+----------------------------
+
+Valhalla:
+  - Memory: 4-8GB typical (depends on tile size)
+  - CPU: Multi-threaded routing
+  - Latency: <100ms for typical routing requests
+
+OR-tools:
+  - Memory: 1-2GB typical
+  - CPU: Single-threaded solving (configurable)
+  - Latency: 1-30 seconds depending on problem size
+
+Trash Route Generator:
+  - Memory: 500MB-2GB (depends on OSM file size)
+  - CPU: Single-threaded processing
+  - Latency: 5-60 seconds depending on area size
+
+
+SECURITY CONSIDERATIONS
+------------------------
+
+- Services run in isolated Docker containers
+- Internal network communication (no external exposure required)
+- Health checks for service availability
+- Resource limits prevent resource exhaustion
+- Read-only mounts where possible
+
+
+SCALING CONSIDERATIONS
+----------------------
+
+Horizontal Scaling:
+  - Valhalla: Can run multiple instances behind load balancer
+  - OR-tools: Stateless API, can scale horizontally
+  - Trash Route API: Stateless API, can scale horizontally
+
+Vertical Scaling:
+  - Adjust CPU/memory limits in docker-compose.yml
+  - Increase Valhalla memory for larger tile sets
+  - Increase OR-tools timeout for larger VRP problems
+
+
+MONITORING & LOGGING
+--------------------
+
+Health Checks:
+  - All services have health check endpoints
+  - GET /health on each service
+
+Logging:
+  - JSON file logging with rotation (10MB, 3 files per service)
+  - Access logs: docker compose logs -f [service-name]
+
+Example Commands:
+  - View all logs: docker compose logs -f
+  - View Valhalla logs: docker compose logs -f valhalla
+  - View OR-tools logs: docker compose logs -f or-tools-solver
+  - View Trash API logs: docker compose logs -f trash-route-api
+
+
+DEVELOPMENT VS PRODUCTION
+-------------------------
+
+Development:
+  - Source code mounted as volumes for live reload
+  - Debug logging enabled
+  - Hot reload capabilities
+
+Production:
+  - Source code baked into images
+  - Optimized logging
+  - Resource limits enforced
+  - Health checks for orchestration
+
+
+QUICK REFERENCE
+---------------
+
+Service Ports:
+  - Valhalla: 8002
+  - OR-tools: 5000
+  - Trash Route API: 8003
+
+Network:
+  - valhalla-network (bridge)
+
+Key Endpoints:
+  - Valhalla: http://localhost:8002/status
+  - OR-tools: http://localhost:5000/health
+  - Trash API: http://localhost:8003/health
+
+Common Commands:
+  - Start services: docker compose up -d
+  - Stop services: docker compose down
+  - View logs: docker compose logs -f
+  - Check status: docker compose ps
+
+
+================================================================================
+End of Architecture Documentation
+================================================================================

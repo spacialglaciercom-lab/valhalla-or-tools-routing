@@ -1,183 +1,279 @@
-# Data Drift Sentinel
+# Valhalla + OR-tools Routing System
 
-A Streamlit application for monitoring data drift between baseline and current datasets using Population Stability Index (PSI) and other statistical measures.
+A comprehensive routing system combining Valhalla routing engine, OR-tools VRP solver, and trash collection route generation with a Streamlit web interface.
 
-🔗 **Repository**: [https://github.com/spacialglaciercom-lab/data-drift-sentinel](https://github.com/spacialglaciercom-lab/data-drift-sentinel)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
 ## Features
 
-- **Deterministic Statistics Report**: Comprehensive statistical comparison between baseline and current datasets
-- **PSI Calculation**: Population Stability Index for measuring data drift
-- **Severity Thresholds**: Configurable thresholds for drift severity classification
-- **Pydantic Models**: Structured, serializable `DriftReport` model with schema validation
-- **Optional Metrics**: KS test p-values and Jensen-Shannon divergence
-- **Optional LLM Summary**: AI-powered summary grounded in computed JSON facts (optional feature)
+- **Valhalla Routing Engine** - High-performance routing and distance matrix calculations
+- **OR-tools VRP Solver** - Vehicle Routing Problem optimization with multiple vehicles
+- **Trash Route Generator** - Optimized trash collection routes from OSM data
+- **Streamlit Web Interface** - User-friendly web UI for all services
+- **Docker Integration** - Complete containerized setup
+- **Fast PBF Parsing** - Using pyrosm for fast OSM PBF file processing
+
+## Architecture
+
+The system consists of three main Docker services:
+
+- **Valhalla** (Port 8002) - Routing engine service
+- **OR-tools Solver** (Port 5000) - VRP optimization API
+- **Trash Route API** (Port 8003) - Route generation API
+
+See [ARCHITECTURE.md](valhalla-docker/ARCHITECTURE.md) for detailed architecture documentation.
+
+## Quick Start
+
+### Prerequisites
+
+- Docker Desktop installed and running
+- 10GB free disk space
+- Internet connection
+
+### 1. Start Services
+
+```bash
+cd valhalla-docker
+docker compose up -d
+```
+
+Wait for services to be ready (first run may take 10-30 minutes for Valhalla to build tiles).
+
+### 2. Check Service Status
+
+```bash
+# Check Valhalla
+curl http://localhost:8002/status
+
+# Check OR-tools API
+curl http://localhost:5000/health
+
+# Check Trash Route API
+curl http://localhost:8003/health
+```
+
+### 3. Launch Streamlit Interface
+
+```bash
+cd valhalla-docker
+pip install -r requirements-streamlit.txt
+streamlit run streamlit_app.py
+```
+
+The interface will be available at `http://localhost:8501`
+
+### 4. Or Use the APIs Directly
+
+See [QUICK_START.md](valhalla-docker/QUICK_START.md) for API usage examples.
+
+## Installation
+
+### Docker Services
+
+All services run in Docker containers. See [valhalla-docker/QUICK_START.md](valhalla-docker/QUICK_START.md) for detailed setup instructions.
+
+### Streamlit Interface (Optional)
+
+```bash
+cd valhalla-docker
+pip install -r requirements-streamlit.txt
+streamlit run streamlit_app.py
+```
+
+## Usage
+
+### Streamlit Web Interface
+
+The Streamlit interface provides:
+
+1. **Dashboard** - Service status and overview
+2. **VRP Solver** - Solve vehicle routing problems
+   - Input locations manually or via JSON
+   - Configure number of vehicles and depot
+   - View optimized routes and download results
+3. **Trash Route Generator** - Generate routes from OSM files
+   - Upload OSM files (XML or PBF)
+   - Generate optimized routes
+   - Download GPX files and reports
+
+### VRP Solver API
+
+```bash
+curl -X POST http://localhost:5000/api/v1/solve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "locations": [
+      {"id": 1, "latitude": 45.2462012, "longitude": -74.2427412, "name": "Loc 1"},
+      {"id": 2, "latitude": 45.2492513, "longitude": -74.2439336, "name": "Loc 2"}
+    ],
+    "num_vehicles": 1,
+    "depot_id": 1
+  }'
+```
+
+### Trash Route Generator API
+
+```bash
+# Upload OSM file
+curl -X POST http://localhost:8003/upload \
+  -F "file=@area.osm"
+
+# Generate route (use job_id from upload response)
+curl -X POST http://localhost:8003/generate \
+  -H "Content-Type: application/json" \
+  -d '{"job_id": "your-job-id"}'
+
+# Check status
+curl http://localhost:8003/status/your-job-id
+
+# Download results
+curl http://localhost:8003/download/your-job-id
+```
+
+See [valhalla-docker/README.md](valhalla-docker/README.md) for detailed API documentation.
 
 ## Project Structure
 
 ```
-data-drift-sentinel/
+.
+├── README.md                 # This file
+├── LICENSE                   # MIT License
+├── .gitignore               # Git ignore rules
+├── valhalla-docker/         # Main Docker setup
+│   ├── docker-compose.yml   # Service orchestration
+│   ├── streamlit_app.py     # Streamlit web interface
+│   ├── QUICK_START.md       # Quick start guide
+│   ├── ARCHITECTURE.md      # Architecture documentation
+│   ├── or-tools/            # OR-tools service
+│   │   ├── app.py           # FastAPI server
+│   │   ├── vrp_solver.py    # VRP solver implementation
+│   │   └── client_example.py # Example client
+│   ├── scripts/             # Utility scripts
+│   └── config/              # Configuration files
+├── backend/
+│   └── trash-route-api/     # Trash route generation API
+│       ├── app/             # FastAPI application
+│       └── Dockerfile       # Container definition
 ├── src/
-│   ├── __init__.py
-│   ├── compute_drift.py       # Main compute_drift function
-│   ├── models.py              # Pydantic models for DriftReport
-│   ├── config.py              # Configuration management
-│   ├── psi_calculator.py      # PSI calculation implementation
-│   ├── statistics.py          # Statistical measures and comparisons
-│   ├── metrics.py             # Additional metrics (KS test, JS divergence)
-│   ├── report_builder.py      # Build DriftReport from detection results
-│   ├── llm_summary.py         # Optional LLM-based summary generation
-│   ├── drift_detector.py      # Legacy DriftDetector class
-│   └── utils.py               # Utility functions
-├── app/
-│   ├── __init__.py
-│   ├── main.py                # Streamlit main application
-│   ├── components.py          # UI components
-│   └── utils.py               # Streamlit utilities
-├── pages/
-│   ├── 1_📤_Upload.py
-│   ├── 2_🔍_Schema_Quality.py
-│   ├── 3_📊_Drift_Report.py
-│   ├── 4_🤖_LLM_Summary.py
-│   └── 5_💾_Export.py
-├── tests/
-│   ├── __init__.py
-│   ├── test_psi_synthetic.py
-│   ├── test_severity_mapping.py
-│   └── test_schema_diff.py
-├── .streamlit/
-│   └── secrets.toml.example
-├── requirements.txt
-├── .gitignore
-└── README.md
+│   └── route_generator/     # Route generation logic
+│       ├── osm_parser.py    # OSM file parsing (pyrosm)
+│       ├── graph_builder.py # Network graph construction
+│       └── ...
+└── tests/                   # Test suite
 ```
 
-## Installation
+## Technology Stack
+
+### Routing & Optimization
+- **Valhalla** - C++ routing engine
+- **OR-tools** - Google's optimization library
+- **NetworkX** - Python graph library
+
+### Data Processing
+- **Pyrosm** - Fast PBF parsing (Cython-based)
+- **Geopandas** - GeoDataFrame operations
+- **GPXpy** - GPX file generation
+
+### APIs & Services
+- **FastAPI** - REST API framework
+- **Uvicorn** - ASGI server
+- **Streamlit** - Web interface
+- **WebSockets** - Real-time updates
+
+### Infrastructure
+- **Docker** - Containerization
+- **Docker Compose** - Service orchestration
+
+## Development
+
+### Running Tests
 
 ```bash
+pytest tests/ -v
+```
+
+### Local Development
+
+For local development without Docker:
+
+```bash
+# Install dependencies
 pip install -r requirements.txt
+pip install -r backend/trash-route-api/requirements.txt
+pip install -r valhalla-docker/requirements-streamlit.txt
+
+# Run Streamlit (requires services to be running)
+cd valhalla-docker
+streamlit run streamlit_app.py
 ```
 
-## Configuration
-
-### LLM API Key (Optional)
-
-For LLM summary generation, configure your API key using one of these methods:
-
-**Recommended: Streamlit Secrets**
-1. Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`
-2. Add your API key: `LLM_API_KEY = "your-api-key-here"`
-3. Restart Streamlit
-
-**Alternative: Environment Variable**
-- Set `OPENAI_API_KEY` or `LLM_API_KEY` environment variable
-- Or use `.env` file (copy `.env.example` to `.env` and add your key)
-
-The app will automatically detect the API key and enable LLM summary features. If no API key is found, you'll see: "LLM summary disabled — add API key to Streamlit secrets."
-
-## Usage
-
-Run the Streamlit multipage application:
+### Building Docker Images
 
 ```bash
-streamlit run app/main.py
+cd valhalla-docker
+docker compose build
 ```
 
-The app will automatically detect the `pages/` directory and create a navigation menu with:
-- **📤 Upload** - Upload baseline and current datasets
-- **🔍 Schema & Quality** - View schema differences and configure drift detection
-- **📊 Drift Report** - Compute and visualize drift with interactive charts
-- **🤖 LLM Summary** - Generate AI-powered summaries (optional)
-- **💾 Export** - Export results as JSON or CSV
+## Contributing
 
-## Testing
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## Documentation
+
+- [Quick Start Guide](valhalla-docker/QUICK_START.md) - Get started in 5 minutes
+- [Architecture Documentation](valhalla-docker/ARCHITECTURE.md) - System architecture
+- [API Documentation](valhalla-docker/README.md) - Detailed API reference
+
+## Troubleshooting
+
+### Services won't start
 
 ```bash
-pytest tests/
+# Check Docker is running
+docker ps
+
+# Check ports are free
+netstat -ano | findstr :8002
+netstat -ano | findstr :5000
+netstat -ano | findstr :8003
 ```
 
-## Deployment
+### Valhalla taking too long
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions on deploying to GitHub.
+- First run downloads ~5GB of map data
+- Check internet connection
+- Monitor progress: `docker compose logs -f valhalla`
 
-Quick start:
+### API errors
+
 ```bash
-git init
-git add .
-git commit -m "Initial commit: Data Drift Sentinel"
-# Create repository on GitHub, then:
-git remote add origin https://github.com/YOUR_USERNAME/data-drift-sentinel.git
-git branch -M main
-git push -u origin main
+# Check service logs
+docker compose logs or-tools-solver
+docker compose logs trash-route-api
+
+# Verify services are healthy
+curl http://localhost:8002/status
+curl http://localhost:5000/health
+curl http://localhost:8003/health
 ```
 
-## compute_drift Function
-
-The main `compute_drift` function provides comprehensive drift detection:
-
-```python
-from src.compute_drift import compute_drift
-from src.config import DriftConfig, SeverityThresholds
-
-# With default config
-report = compute_drift(baseline_df, current_df)
-
-# With custom config
-config = DriftConfig(
-    bins=15,
-    min_bins=5,
-    max_categories=10,
-    include_ks=True,
-    include_js=True,
-    binning_method="adaptive"
-)
-
-thresholds = SeverityThresholds(
-    low_threshold=0.1,
-    medium_threshold=0.25,
-    high_threshold=0.5
-)
-
-report = compute_drift(baseline_df, current_df, config, thresholds)
-```
-
-**Features:**
-- **Numeric columns**: PSI (with robust binning), KS test p-value, JS divergence, missing delta, summary stats deltas
-- **Categorical columns**: PSI using top K categories + 'other' bucket, JS divergence, missing delta
-- **Robust binning**: Adapts to small sample sizes
-- **Schema diff**: Detects added/removed columns and type changes
-
-## DriftReport Model
-
-The `DriftReport` Pydantic model provides a structured, serializable JSON output with:
-
-- **Dataset Metadata**: Row/column counts, common columns
-- **Schema Diff**: Added/removed columns, type changes
-- **Per-Column Metrics**: PSI, missing delta, severity, optional KS p-value and JS divergence, summary stats deltas
-- **Top Changed Columns**: List of columns with highest drift, sorted by PSI
-
-Example usage:
-
-```python
-from src.compute_drift import compute_drift
-import pandas as pd
-
-# Load your data
-baseline_df = pd.read_csv('baseline.csv')
-current_df = pd.read_csv('current.csv')
-
-# Compute drift
-report = compute_drift(baseline_df, current_df)
-
-# Serialize to JSON (stable, deterministic)
-json_output = report.model_dump_json()
-
-# Access structured data
-print(report.dataset_metadata.baseline_rows)
-print(report.per_column_metrics['age'].psi)
-print(report.top_changed_columns[0].column_name)
-```
+See [valhalla-docker/TROUBLESHOOTING.md](valhalla-docker/TROUBLESHOOTING.md) for more troubleshooting tips.
 
 ## License
 
-See LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [Valhalla](https://github.com/valhalla/valhalla) - Routing engine
+- [OR-tools](https://github.com/google/or-tools) - Optimization library
+- [Pyrosm](https://github.com/pyrosm/pyrosm) - Fast OSM parsing
+- [Streamlit](https://streamlit.io/) - Web framework
