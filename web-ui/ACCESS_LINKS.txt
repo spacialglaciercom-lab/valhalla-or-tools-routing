@@ -1,0 +1,24 @@
+VALHALLA ROUTING WEB UI - ACCESS LINKS
+==========================================
+
+BACKEND API ENDPOINTS (Valhalla):
+http://localhost:8002/status
+http://localhost:8002/route
+http://localhost:8002/isochrone
+http://localhost:8002/sources_to_targets
+http://localhost:8002/locate
+
+FRONTEND WEB APPLICATION (Next.js):
+http://localhost:3000
+
+DOCKER VALHALLA STATUS:
+Container: valhalla-routing
+Status: Running and Healthy
+Port: 8002
+
+QUICK COMMANDS:
+Start Valhalla: cd C:\Users\Space\valhalla-docker 
+ docker-compose up -d
+Start Web UI: cd C:\Users\Space\web-ui
+  npm run dev
+Check Valhalla Status: Invoke-WebRequest -Uri "http://localhost:8002/status" -UseBasicParsing
