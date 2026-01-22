@@ -1,406 +1,338 @@
-"""
-Streamlit Web Interface for Valhalla + OR-tools Routing System
-"""
+#!/usr/bin/env python3
+"""Desktop GUI application for Trash Collection Route Generator"""
 
-import streamlit as st
-import requests
-import json
-import time
-from typing import List, Dict, Optional
-import pandas as pd
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox, scrolledtext
+import threading
+import os
+import sys
+from pathlib import Path
 
-# Page configuration
-st.set_page_config(
-    page_title="Routing System - VRP & Trash Routes",
-    page_icon="🗺️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# API endpoints
-VALHALLA_URL = "http://localhost:8002"
-OR_TOOLS_URL = "http://localhost:5000"
-TRASH_API_URL = "http://localhost:8003"
-
-# Initialize session state
-if 'vrp_result' not in st.session_state:
-    st.session_state.vrp_result = None
-if 'trash_route_job_id' not in st.session_state:
-    st.session_state.trash_route_job_id = None
+from src.route_generator import TrashRouteGenerator
 
 
-def check_service_health(url: str, service_name: str) -> bool:
-    """Check if a service is healthy"""
-    try:
-        response = requests.get(f"{url}/health", timeout=5)
-        return response.status_code == 200
-    except:
-        return False
-
-
-def get_service_status() -> Dict[str, bool]:
-    """Get status of all services"""
-    return {
-        "Valhalla": check_service_health(VALHALLA_URL, "Valhalla"),
-        "OR-tools API": check_service_health(OR_TOOLS_URL, "OR-tools"),
-        "Trash Route API": check_service_health(TRASH_API_URL, "Trash Route API")
-    }
-
-
-# Sidebar navigation
-st.sidebar.title("🗺️ Routing System")
-st.sidebar.markdown("---")
-
-page = st.sidebar.selectbox(
-    "Navigation",
-    ["Dashboard", "VRP Solver", "Trash Route Generator"]
-)
-
-# Service status in sidebar
-st.sidebar.markdown("---")
-st.sidebar.subheader("Service Status")
-status = get_service_status()
-for service, is_healthy in status.items():
-    status_icon = "🟢" if is_healthy else "🔴"
-    st.sidebar.markdown(f"{status_icon} {service}")
-
-if not all(status.values()):
-    st.sidebar.warning("⚠️ Some services are offline. Start Docker services first.")
-
-
-# Dashboard Page
-if page == "Dashboard":
-    st.title("🗺️ Routing System Dashboard")
-    st.markdown("Welcome to the Valhalla + OR-tools Routing System")
-    st.markdown("---")
+class TrashRouteGUI:
+    """Desktop GUI application for trash collection route generation"""
     
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.subheader("Valhalla Routing")
-        if status["Valhalla"]:
-            st.success("🟢 Online")
-            try:
-                valhalla_info = requests.get(f"{VALHALLA_URL}/status", timeout=5).json()
-                st.json(valhalla_info)
-            except:
-                st.info("Status endpoint available")
-        else:
-            st.error("🔴 Offline")
-            st.info("Start with: `docker compose up -d valhalla`")
-    
-    with col2:
-        st.subheader("OR-tools VRP Solver")
-        if status["OR-tools API"]:
-            st.success("🟢 Online")
-            try:
-                or_tools_info = requests.get(f"{OR_TOOLS_URL}/", timeout=5).json()
-                st.json(or_tools_info)
-            except:
-                st.info("API endpoint available")
-        else:
-            st.error("🔴 Offline")
-            st.info("Start with: `docker compose up -d or-tools-solver`")
-    
-    with col3:
-        st.subheader("Trash Route API")
-        if status["Trash Route API"]:
-            st.success("🟢 Online")
-            try:
-                trash_info = requests.get(f"{TRASH_API_URL}/", timeout=5).json()
-                st.json(trash_info)
-            except:
-                st.info("API endpoint available")
-        else:
-            st.error("🔴 Offline")
-            st.info("Start with: `docker compose up -d trash-route-api`")
-    
-    st.markdown("---")
-    st.subheader("Quick Start")
-    st.markdown("""
-    1. **Start Services**: Run `docker compose up -d` in the valhalla-docker directory
-    2. **VRP Solver**: Use the VRP Solver page to optimize routes for multiple locations
-    3. **Trash Routes**: Use the Trash Route Generator to create routes from OSM files
-    """)
-    
-    st.markdown("---")
-    st.subheader("Documentation")
-    st.markdown("""
-    - [Quick Start Guide](QUICK_START.md)
-    - [Architecture Documentation](ARCHITECTURE.md)
-    - [API Documentation](README.md)
-    """)
-
-
-# VRP Solver Page
-elif page == "VRP Solver":
-    st.title("🚗 VRP Solver")
-    st.markdown("Solve Vehicle Routing Problems with multiple locations")
-    st.markdown("---")
-    
-    if not status["OR-tools API"]:
-        st.error("❌ OR-tools API is offline. Please start the service first.")
-        st.info("Run: `docker compose up -d or-tools-solver`")
-        st.stop()
-    
-    # Input section
-    st.subheader("Input Locations")
-    
-    # Option 1: Manual input
-    input_method = st.radio(
-        "Input Method",
-        ["Manual Entry", "JSON Upload"],
-        horizontal=True
-    )
-    
-    locations = []
-    
-    if input_method == "Manual Entry":
-        num_locations = st.number_input("Number of Locations", min_value=2, max_value=50, value=3)
+    def __init__(self, root):
+        """Initialize the GUI application"""
+        self.root = root
+        self.root.title("Trash Collection Route Generator")
+        self.root.geometry("750x750")  # Increased height for new fields
+        self.root.resizable(True, True)
         
-        for i in range(num_locations):
-            with st.expander(f"Location {i+1}", expanded=(i == 0)):
-                col1, col2, col3 = st.columns([2, 3, 3])
-                with col1:
-                    loc_id = st.number_input(f"ID", value=i+1, min_value=1, key=f"id_{i}")
-                with col2:
-                    lat = st.number_input(f"Latitude", value=45.2462012 + i*0.001, format="%.7f", key=f"lat_{i}")
-                with col3:
-                    lon = st.number_input(f"Longitude", value=-74.2427412 + i*0.001, format="%.7f", key=f"lon_{i}")
-                name = st.text_input(f"Name (optional)", value=f"Loc {loc_id}", key=f"name_{i}")
-                
-                locations.append({
-                    "id": int(loc_id),
-                    "latitude": float(lat),
-                    "longitude": float(lon),
-                    "name": name
-                })
+        # Variables
+        self.osm_file_var = tk.StringVar()
+        self.output_dir_var = tk.StringVar(value=os.path.join(os.getcwd(), "output"))
+        self.gpx_name_var = tk.StringVar(value="trash_collection_route")
+        self.report_name_var = tk.StringVar(value="route_report")
+        self.verbose_var = tk.BooleanVar(value=False)
+        
+        # New: Starting Coordinates
+        self.start_lat_var = tk.StringVar()
+        self.start_lon_var = tk.StringVar()
+        
+        # Results
+        self.gpx_path = None
+        self.report_path = None
+        
+        # Setup UI
+        self.setup_ui()
+        
+        # Center window
+        self.center_window()
     
-    else:  # JSON Upload
-        json_file = st.file_uploader("Upload JSON file", type=['json'])
-        if json_file:
+    def center_window(self):
+        """Center the window on screen"""
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+    
+    def setup_ui(self):
+        """Create and layout all UI components"""
+        # Main container with padding
+        main_frame = ttk.Frame(self.root, padding="15")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Configure grid weights
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        
+        row = 0
+        
+        # Title
+        title_label = ttk.Label(
+            main_frame,
+            text="Trash Collection Route Generator",
+            font=("Segoe UI", 18, "bold")
+        )
+        title_label.grid(row=row, column=0, columnspan=3, pady=(0, 20))
+        row += 1
+        
+        # --- File Section ---
+        file_frame = ttk.LabelFrame(main_frame, text="File Selection", padding="10")
+        file_frame.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        file_frame.columnconfigure(1, weight=1)
+        
+        f_row = 0
+        # OSM File Selection
+        ttk.Label(file_frame, text="OSM File:").grid(row=f_row, column=0, sticky=tk.W, pady=5)
+        ttk.Entry(file_frame, textvariable=self.osm_file_var, width=50, state="readonly").grid(row=f_row, column=1, sticky=(tk.W, tk.E), padx=5)
+        ttk.Button(file_frame, text="Browse...", command=self.browse_osm_file).grid(row=f_row, column=2)
+        f_row += 1
+        
+        # Output Directory
+        ttk.Label(file_frame, text="Output Folder:").grid(row=f_row, column=0, sticky=tk.W, pady=5)
+        ttk.Entry(file_frame, textvariable=self.output_dir_var, width=50).grid(row=f_row, column=1, sticky=(tk.W, tk.E), padx=5)
+        ttk.Button(file_frame, text="Browse...", command=self.browse_output_dir).grid(row=f_row, column=2)
+        
+        row += 1
+
+        # --- Settings Section ---
+        settings_frame = ttk.LabelFrame(main_frame, text="Route Settings", padding="10")
+        settings_frame.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        settings_frame.columnconfigure(1, weight=1)
+        
+        s_row = 0
+        # Filenames
+        ttk.Label(settings_frame, text="GPX Name:").grid(row=s_row, column=0, sticky=tk.W, pady=5)
+        ttk.Entry(settings_frame, textvariable=self.gpx_name_var).grid(row=s_row, column=1, sticky=(tk.W, tk.E), padx=5)
+        
+        ttk.Label(settings_frame, text="Report Name:").grid(row=s_row, column=2, sticky=tk.W, pady=5)
+        ttk.Entry(settings_frame, textvariable=self.report_name_var).grid(row=s_row, column=3, sticky=(tk.W, tk.E), padx=5)
+        s_row += 1
+
+        # Start Coordinates (New Feature)
+        ttk.Label(settings_frame, text="Start Lat (Optional):").grid(row=s_row, column=0, sticky=tk.W, pady=5)
+        ttk.Entry(settings_frame, textvariable=self.start_lat_var, width=15).grid(row=s_row, column=1, sticky=tk.W, padx=5)
+        
+        ttk.Label(settings_frame, text="Start Lon (Optional):").grid(row=s_row, column=2, sticky=tk.W, pady=5)
+        ttk.Entry(settings_frame, textvariable=self.start_lon_var, width=15).grid(row=s_row, column=3, sticky=tk.W, padx=5)
+        
+        # Add a tooltip or helper text
+        s_row += 1
+        ttk.Label(settings_frame, text="Leave Lat/Lon empty to auto-detect best start point", 
+                 font=("Segoe UI", 8, "italic"), foreground="gray").grid(row=s_row, column=0, columnspan=4, sticky=tk.W)
+
+        row += 1
+
+        # Verbose option
+        ttk.Checkbutton(main_frame, text="Show detailed progress logs", variable=self.verbose_var).grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=5)
+        row += 1
+        
+        # Generate Button
+        self.generate_btn = ttk.Button(
+            main_frame,
+            text="Generate Route",
+            command=self.on_generate,
+            style="Accent.TButton"
+        )
+        self.generate_btn.grid(row=row, column=0, columnspan=3, pady=15)
+        row += 1
+        
+        # Status Label
+        self.status_var = tk.StringVar(value="Ready")
+        self.status_label = ttk.Label(
+            main_frame,
+            textvariable=self.status_var,
+            font=("Segoe UI", 9),
+            foreground="gray"
+        )
+        self.status_label.grid(row=row, column=0, columnspan=3, pady=(0, 5))
+        row += 1
+        
+        # Progress/Results Text Area
+        text_frame = ttk.Frame(main_frame)
+        text_frame.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
+        main_frame.rowconfigure(row, weight=1)
+        
+        self.results_text = scrolledtext.ScrolledText(
+            text_frame,
+            height=12,
+            wrap=tk.WORD,
+            font=("Consolas", 9)
+        )
+        self.results_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.results_text.insert("1.0", "Route generation results will appear here...\n")
+        self.results_text.config(state=tk.DISABLED)
+        row += 1
+        
+        # Action Buttons Frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=row, column=0, columnspan=3, pady=10)
+        
+        self.open_folder_btn = ttk.Button(button_frame, text="Open Output Folder", command=self.open_output_folder, state=tk.DISABLED)
+        self.open_folder_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.view_gpx_btn = ttk.Button(button_frame, text="View GPX File", command=self.view_gpx_file, state=tk.DISABLED)
+        self.view_gpx_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.view_report_btn = ttk.Button(button_frame, text="View Report", command=self.view_report_file, state=tk.DISABLED)
+        self.view_report_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Configure style for accent button
+        style = ttk.Style()
+        style.configure("Accent.TButton", font=("Segoe UI", 11, "bold"))
+    
+    def browse_osm_file(self):
+        """Open file dialog to select OSM file"""
+        filename = filedialog.askopenfilename(
+            title="Select OSM File",
+            filetypes=[("OSM/PBF files", "*.osm *.xml *.pbf"), ("All files", "*.*")]
+        )
+        if filename:
+            self.osm_file_var.set(filename)
+            self.status_var.set(f"Selected: {os.path.basename(filename)}")
+    
+    def browse_output_dir(self):
+        dirname = filedialog.askdirectory(title="Select Output Folder", initialdir=self.output_dir_var.get())
+        if dirname:
+            self.output_dir_var.set(dirname)
+    
+    def update_status(self, message: str, color: str = "black"):
+        self.status_var.set(message)
+        self.status_label.config(foreground=color)
+        self.root.update_idletasks()
+    
+    def append_results(self, text: str):
+        self.results_text.config(state=tk.NORMAL)
+        self.results_text.insert(tk.END, text + "\n")
+        self.results_text.see(tk.END)
+        self.results_text.config(state=tk.DISABLED)
+        self.root.update_idletasks()
+    
+    def clear_results(self):
+        self.results_text.config(state=tk.NORMAL)
+        self.results_text.delete("1.0", tk.END)
+        self.results_text.config(state=tk.DISABLED)
+    
+    def on_generate(self):
+        osm_file = self.osm_file_var.get()
+        if not osm_file or not os.path.exists(osm_file):
+            messagebox.showerror("Error", "Please select a valid OSM file")
+            return
+        
+        output_dir = self.output_dir_var.get()
+        if not output_dir:
+            messagebox.showerror("Error", "Please specify an output directory")
+            return
+        
+        # Parse start coordinates if provided
+        start_lat = None
+        start_lon = None
+        if self.start_lat_var.get() and self.start_lon_var.get():
             try:
-                json_data = json.load(json_file)
-                if "locations" in json_data:
-                    locations = json_data["locations"]
-                    st.success(f"Loaded {len(locations)} locations")
-                    st.json(locations)
-                else:
-                    st.error("JSON file must contain 'locations' array")
-            except Exception as e:
-                st.error(f"Error reading JSON file: {e}")
-    
-    # Solver parameters
-    st.markdown("---")
-    st.subheader("Solver Parameters")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        num_vehicles = st.number_input("Number of Vehicles", min_value=1, max_value=10, value=1)
-    
-    with col2:
-        depot_id = st.number_input(
-            "Depot ID (starting location)",
-            min_value=1,
-            max_value=len(locations) if locations else 1,
-            value=1
-        ) if locations else 1
-    
-    # Solve button
-    st.markdown("---")
-    solve_button = st.button("🚀 Solve VRP", type="primary", use_container_width=True)
-    
-    if solve_button and locations:
-        if len(locations) < 2:
-            st.error("At least 2 locations are required")
-        else:
-            with st.spinner("Solving VRP problem..."):
-                try:
-                    payload = {
-                        "locations": locations,
-                        "num_vehicles": int(num_vehicles),
-                        "depot_id": int(depot_id)
-                    }
-                    
-                    response = requests.post(
-                        f"{OR_TOOLS_URL}/api/v1/solve",
-                        json=payload,
-                        headers={"Content-Type": "application/json"},
-                        timeout=60
-                    )
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        st.session_state.vrp_result = result
-                        st.success("✅ Solution found!")
-                    else:
-                        st.error(f"Error: {response.status_code}")
-                        st.code(response.text)
-                        
-                except requests.exceptions.RequestException as e:
-                    st.error(f"Connection error: {e}")
-                    st.info("Make sure OR-tools service is running")
-    
-    # Display results
-    if st.session_state.vrp_result:
-        result = st.session_state.vrp_result
-        st.markdown("---")
-        st.subheader("Results")
+                start_lat = float(self.start_lat_var.get())
+                start_lon = float(self.start_lon_var.get())
+            except ValueError:
+                messagebox.showerror("Error", "Invalid coordinates. Please enter numbers.")
+                return
+
+        # Create output directory
+        try:
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            messagebox.showerror("Error", f"Cannot create output directory: {e}")
+            return
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Distance", f"{result.get('total_distance_m', 0):,} m")
-        with col2:
-            st.metric("Number of Routes", result.get('num_routes', 0))
-        with col3:
-            st.metric("Vehicles Used", result.get('num_vehicles_used', 0))
+        # UI State updates
+        self.generate_btn.config(state=tk.DISABLED)
+        self.open_folder_btn.config(state=tk.DISABLED)
+        self.view_gpx_btn.config(state=tk.DISABLED)
+        self.view_report_btn.config(state=tk.DISABLED)
         
-        # Routes table
-        if result.get('routes'):
-            st.markdown("### Routes")
-            for route in result['routes']:
-                with st.expander(f"Vehicle {route['vehicle']} - {route['distance_m']:,} m - {len(route['stops'])} stops"):
-                    route_df = pd.DataFrame(route['stops'])
-                    st.dataframe(route_df[['id', 'name', 'latitude', 'longitude']], use_container_width=True)
+        self.update_status("Generating route...", "blue")
+        self.clear_results()
+        self.append_results("=" * 60)
+        self.append_results("TRASH COLLECTION ROUTE GENERATOR")
+        self.append_results("=" * 60)
+        
+        # Run in thread
+        thread = threading.Thread(
+            target=self.generate_route_worker,
+            args=(osm_file, output_dir, start_lat, start_lon),
+            daemon=True
+        )
+        thread.start()
+    
+    def generate_route_worker(self, osm_file, output_dir, start_lat, start_lon):
+        try:
+            generator = TrashRouteGenerator(osm_file, output_dir)
             
-            # Download results
-            st.markdown("---")
-            st.subheader("Download Results")
-            json_str = json.dumps(result, indent=2)
-            st.download_button(
-                label="📥 Download Results (JSON)",
-                data=json_str,
-                file_name=f"vrp_solution_{int(time.time())}.json",
-                mime="application/json"
+            # Progress callback wrapper
+            def progress_cb(step, pct, msg, stats):
+                self.root.after(0, self.update_status, msg, "blue")
+                if self.verbose_var.get():
+                    self.root.after(0, self.append_results, f"[{pct}%] {msg}")
+
+            generator.progress_callback = progress_cb
+            
+            self.root.after(0, self.append_results, "Starting generation...")
+            
+            gpx_path, report_path = generator.generate(
+                output_gpx=self.gpx_name_var.get(),
+                output_report=self.report_name_var.get(),
+                start_lat=start_lat,
+                start_lon=start_lon
             )
+            
+            self.gpx_path = gpx_path
+            self.report_path = report_path
+            
+            # Show summary stats
+            summary = generator.get_summary()
+            self.root.after(0, self.append_results, "\n" + "="*30)
+            self.root.after(0, self.append_results, "GENERATION COMPLETE")
+            self.root.after(0, self.append_results, "="*30)
+            
+            if 'route' in summary['stats']:
+                s = summary['stats']['route']
+                self.root.after(0, self.append_results, f"Distance: {s.get('total_distance_km')} km")
+                self.root.after(0, self.append_results, f"Est. Time: {s.get('estimated_drive_time_hours')} hours")
 
+            self.root.after(0, self.update_status, "✓ Success!", "green")
+            self.root.after(0, self.generate_btn.config, {"state": tk.NORMAL})
+            self.root.after(0, self.open_folder_btn.config, {"state": tk.NORMAL})
+            self.root.after(0, self.view_gpx_btn.config, {"state": tk.NORMAL})
+            self.root.after(0, self.view_report_btn.config, {"state": tk.NORMAL})
+            
+        except Exception as e:
+            self.root.after(0, self.append_results, f"\n✗ ERROR: {str(e)}")
+            self.root.after(0, self.update_status, "Failed", "red")
+            self.root.after(0, self.generate_btn.config, {"state": tk.NORMAL})
 
-# Trash Route Generator Page
-elif page == "Trash Route Generator":
-    st.title("🗑️ Trash Route Generator")
-    st.markdown("Generate optimized trash collection routes from OSM files")
-    st.markdown("---")
+    def open_output_folder(self):
+        if self.output_dir_var.get():
+            path = Path(self.output_dir_var.get())
+            if sys.platform == "win32": os.startfile(path)
+            elif sys.platform == "darwin": os.system(f"open {path}")
+            else: os.system(f"xdg-open {path}")
     
-    if not status["Trash Route API"]:
-        st.error("❌ Trash Route API is offline. Please start the service first.")
-        st.info("Run: `docker compose up -d trash-route-api`")
-        st.stop()
+    def view_gpx_file(self):
+        if self.gpx_path and os.path.exists(self.gpx_path):
+            if sys.platform == "win32": os.startfile(self.gpx_path)
+            elif sys.platform == "darwin": os.system(f"open {self.gpx_path}")
+            else: os.system(f"xdg-open {self.gpx_path}")
     
-    # File upload
-    st.subheader("Upload OSM File")
-    uploaded_file = st.file_uploader(
-        "Choose OSM file",
-        type=['osm', 'pbf', 'xml'],
-        help="Upload OpenStreetMap file in XML or PBF format"
-    )
-    
-    if uploaded_file:
-        st.success(f"File uploaded: {uploaded_file.name}")
-        st.info(f"Size: {uploaded_file.size / 1024:.2f} KB")
-    
-    # Generate button
-    if uploaded_file:
-        st.markdown("---")
-        generate_button = st.button("🚀 Generate Route", type="primary", use_container_width=True)
-        
-        if generate_button:
-            with st.spinner("Uploading file and generating route..."):
-                try:
-                    # Upload file
-                    files = {'file': (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-                    upload_response = requests.post(
-                        f"{TRASH_API_URL}/upload",
-                        files=files,
-                        timeout=60
-                    )
-                    
-                    if upload_response.status_code == 200:
-                        upload_result = upload_response.json()
-                        job_id = upload_result.get('job_id')
-                        st.session_state.trash_route_job_id = job_id
-                        st.success(f"✅ File uploaded! Job ID: {job_id}")
-                        
-                        # Start generation
-                        generate_response = requests.post(
-                            f"{TRASH_API_URL}/generate",
-                            json={"job_id": job_id},
-                            timeout=5
-                        )
-                        
-                        if generate_response.status_code == 200:
-                            st.info("⏳ Route generation started. Check status below.")
-                        else:
-                            st.error(f"Error starting generation: {generate_response.status_code}")
-                    else:
-                        st.error(f"Upload error: {upload_response.status_code}")
-                        st.code(upload_response.text)
-                        
-                except requests.exceptions.RequestException as e:
-                    st.error(f"Connection error: {e}")
-    
-    # Status check
-    if st.session_state.trash_route_job_id:
-        st.markdown("---")
-        st.subheader("Generation Status")
-        
-        job_id = st.session_state.trash_route_job_id
-        
-        if st.button("🔄 Check Status"):
-            try:
-                status_response = requests.get(
-                    f"{TRASH_API_URL}/status/{job_id}",
-                    timeout=5
-                )
-                
-                if status_response.status_code == 200:
-                    status_data = status_response.json()
-                    status_state = status_data.get('status', 'unknown')
-                    
-                    if status_state == 'completed':
-                        st.success("✅ Route generation completed!")
-                        
-                        # Download results
-                        st.markdown("### Download Results")
-                        
-                        download_response = requests.get(
-                            f"{TRASH_API_URL}/download/{job_id}",
-                            timeout=30
-                        )
-                        
-                        if download_response.status_code == 200:
-                            download_data = download_response.json()
-                            
-                            # Download GPX
-                            if 'gpx_file' in download_data:
-                                st.download_button(
-                                    label="📥 Download GPX File",
-                                    data=download_data['gpx_file'],
-                                    file_name=f"trash_route_{job_id}.gpx",
-                                    mime="application/gpx+xml"
-                                )
-                            
-                            # Download Report
-                            if 'report_file' in download_data:
-                                st.download_button(
-                                    label="📥 Download Report",
-                                    data=download_data['report_file'],
-                                    file_name=f"trash_route_report_{job_id}.md",
-                                    mime="text/markdown"
-                                )
-                            
-                            st.json(download_data)
-                    elif status_state == 'processing':
-                        st.info("⏳ Route generation in progress...")
-                        st.progress(0.5)
-                    elif status_state == 'error':
-                        st.error("❌ Route generation failed")
-                        if 'error' in status_data:
-                            st.code(status_data['error'])
-                    else:
-                        st.info(f"Status: {status_state}")
-                        st.json(status_data)
-                else:
-                    st.error(f"Status check error: {status_response.status_code}")
-                    
-            except requests.exceptions.RequestException as e:
-                st.error(f"Connection error: {e}")
+    def view_report_file(self):
+        if self.report_path and os.path.exists(self.report_path):
+            if sys.platform == "win32": os.startfile(self.report_path)
+            elif sys.platform == "darwin": os.system(f"open {self.report_path}")
+            else: os.system(f"xdg-open {self.report_path}")
+
+def main():
+    root = tk.Tk()
+    app = TrashRouteGUI(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
