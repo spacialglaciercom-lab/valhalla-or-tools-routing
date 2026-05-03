@@ -1,4 +1,26 @@
+# Core dependencies for route generation
+networkx>=3.0
+gpxpy>=1.5.0
+ortools>=9.8
+
+# API dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+pydantic>=2.0
+
+# Data processing (optional for PBF support)
+# pyrosm>=0.6.0
+# geopandas>=0.14.0
+pandas>=2.0.0
+
 # Streamlit app dependencies
 streamlit>=1.28.0
 requests>=2.31.0
-pandas>=2.0.0
+
+# Test dependencies
+pytest>=7.4.0
+httpx>=0.25.0
+pytest-asyncio>=0.21.0
