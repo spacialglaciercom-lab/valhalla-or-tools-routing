@@ -25,20 +25,18 @@ class TurnOptimizer:
         Optimize Eulerian circuit with turn preferences.
         
         Since NetworkX's eulerian_circuit() doesn't expose edge selection choices,
-        we post-process the circuit by analyzing turn costs. The optimization
-        identifies opportunities where turn preferences can be applied during
-        route planning, though full reordering requires maintaining Eulerian property.
+        we post-process the circuit by analyzing turn costs.
         
-        Note: True turn optimization would require a custom Hierholzer's algorithm
-        that selects next edges based on turn costs. This post-processing step
-        validates and reports turn statistics but cannot significantly reorder
-        an already-generated Eulerian circuit without complex validation.
+        Note: True turn optimization is implemented in EulerianSolver._solve_with_turn_costs
+        using a custom Hierholzer's algorithm that selects next edges based on turn costs.
+        This post-processing step validates and reports turn statistics but does not
+        reorder the circuit.
         
         Args:
             circuit: List of (from_node, to_node) edges from Eulerian circuit
             
         Returns:
-            Circuit (may be reordered where safe improvements are found)
+            Circuit (returned as-is, optimization happens in the solver)
         """
         logger.info(f"Analyzing circuit with {len(circuit)} edges for turn optimization")
         
@@ -59,11 +57,6 @@ class TurnOptimizer:
                     bad_turns += 1
         
         logger.info(f"Current turn cost: {total_cost:.1f}, bad turns: {bad_turns}")
-        
-        # For now, return circuit as-is since full optimization requires
-        # custom Eulerian circuit generation with turn-aware edge selection.
-        # The turn statistics will still be computed and reported correctly.
-        # Future enhancement: implement custom Hierholzer's with turn cost heuristic.
         
         return circuit
     
